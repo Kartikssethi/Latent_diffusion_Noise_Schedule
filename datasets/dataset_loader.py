@@ -12,21 +12,28 @@ from .preprocessing import get_transforms, create_subset
 class KaggleImageFolderDataset(Dataset):
     """
     Generic Image Dataset for directory of images (e.g. CelebA, LSUN Bedroom, Oxford Flowers).
-    Finds all image files (.jpg, .jpeg, .png, .webp) in root or any subfolder.
+    Uses fast os.scandir to find image files (.jpg, .jpeg, .png, .webp) in under a second.
     """
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.transform = transform
-        
-        # Support single folder of images or nested subfolders
-        valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.JPG', '.PNG', '.JPEG')
         self.image_paths = []
         
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.JPG', '.PNG', '.JPEG')
+        
         if os.path.exists(root_dir):
-            for root, _, files in os.walk(root_dir):
-                for f in files:
-                    if f.endswith(valid_extensions):
-                        self.image_paths.append(os.path.join(root, f))
+            stack = [root_dir]
+            while stack:
+                curr_dir = stack.pop()
+                try:
+                    with os.scandir(curr_dir) as entries:
+                        for entry in entries:
+                            if entry.is_dir(follow_symlinks=False):
+                                stack.append(entry.path)
+                            elif entry.name.endswith(valid_extensions):
+                                self.image_paths.append(entry.path)
+                except Exception:
+                    pass
         
         self.image_paths.sort()
         if len(self.image_paths) == 0:
@@ -47,8 +54,8 @@ class KaggleImageFolderDataset(Dataset):
 
 def find_kaggle_dataset_dir(keywords, candidate_paths=None):
     """
-    Dynamically finds a dataset directory in Kaggle (/kaggle/input) or local candidate paths.
-    Matches folder names or paths containing any of the specified keywords.
+    Fast discovery of dataset directory in Kaggle (/kaggle/input) or local candidate paths.
+    Uses non-recursive os.scandir to complete in milliseconds.
     """
     # 1. Check explicit candidate paths first
     if candidate_paths:
@@ -56,24 +63,28 @@ def find_kaggle_dataset_dir(keywords, candidate_paths=None):
             if path and os.path.exists(path):
                 return path
 
-    # 2. Dynamic search inside /kaggle/input if available
+    # 2. Fast scan top-level subdirectories inside /kaggle/input
     kaggle_input = "/kaggle/input"
     if os.path.exists(kaggle_input):
-        subdirs = os.listdir(kaggle_input)
-        
-        # Direct folder name keyword match under /kaggle/input/
-        for entry in subdirs:
-            full_path = os.path.join(kaggle_input, entry)
-            entry_lower = entry.lower()
-            if any(kw.lower() in entry_lower for kw in keywords):
-                return full_path
-
-        # Deep search in /kaggle/input tree
-        for root, dirs, files in os.walk(kaggle_input):
-            root_lower = root.lower()
-            if any(kw.lower() in root_lower for kw in keywords):
-                if len(files) > 0 or len(dirs) > 0:
-                    return root
+        try:
+            with os.scandir(kaggle_input) as entries:
+                for entry in entries:
+                    if entry.is_dir(follow_symlinks=False):
+                        entry_lower = entry.name.lower()
+                        if any(kw.lower() in entry_lower for kw in keywords):
+                            return entry.path
+                        # Check 1 level deep inside kaggle input dataset folders
+                        try:
+                            with os.scandir(entry.path) as sub_entries:
+                                for sub in sub_entries:
+                                    if sub.is_dir(follow_symlinks=False):
+                                        sub_lower = sub.name.lower()
+                                        if any(kw.lower() in sub_lower for kw in keywords):
+                                            return sub.path
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
     return None
 
@@ -107,7 +118,7 @@ def load_dataset(dataset_name, root_dir=None, image_size=256, is_train=True, fra
     - 'lsun' (LSUN Bedroom)
 
     Automatically applies:
-    1. 256x256 RGB Transformation & [-1, 1] Normalization
+    1. 256x256 RGB Transformation & [-1, 1] Normalization (on-the-fly)
     2. Subsampling to only `fraction` (default: 0.4 = 40%) of dataset
     """
     transform = get_transforms(image_size=image_size, is_train=is_train)
@@ -117,7 +128,13 @@ def load_dataset(dataset_name, root_dir=None, image_size=256, is_train=True, fra
         cifar_candidate = find_kaggle_dataset_dir(["cifar"], [root_dir, "./data"])
         if cifar_candidate and os.path.exists(cifar_candidate):
             valid_exts = ('.jpg', '.png', '.jpeg', '.bmp')
-            has_images = any(f.lower().endswith(valid_exts) for _, _, files in os.walk(cifar_candidate) for f in files)
+            has_images = False
+            try:
+                with os.scandir(cifar_candidate) as entries:
+                    has_images = any(e.name.lower().endswith(valid_exts) for e in entries)
+            except Exception:
+                pass
+            
             if has_images:
                 dataset = KaggleImageFolderDataset(root_dir=cifar_candidate, transform=transform)
             else:
