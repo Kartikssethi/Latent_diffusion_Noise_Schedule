@@ -14,7 +14,7 @@ def find_repo_root():
         '/kaggle/working/Latent_diffusion_Noise_Schedule/Latent_diffusion_Noise_Schedule',
         '/kaggle/working',
         os.getcwd(),
-        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(),
     ]
     for path in candidates:
         if os.path.isfile(os.path.join(path, 'datasets', 'preprocessing.py')):
