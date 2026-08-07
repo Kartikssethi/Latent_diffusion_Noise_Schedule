@@ -1,3 +1,3 @@
 # Workspace Rules
 
-- Always ask the user for explicit confirmation/permission before executing `git commit` or `git push` commands.
+- Execute git add, commit, and push automatically for the user when files are created or updated.
