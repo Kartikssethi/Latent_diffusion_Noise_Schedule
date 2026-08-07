@@ -82,7 +82,7 @@ class PreprocessedTensorDataset(Dataset):
 def find_kaggle_dataset_dir(keywords, candidate_paths=None):
     """
     Fast discovery of dataset directory in Kaggle (/kaggle/input) or local candidate paths.
-    Uses non-recursive os.scandir to complete in milliseconds.
+    Supports both individual named folders and the combined /kaggle/input/datasets/ layout.
     """
     if candidate_paths:
         for path in candidate_paths:
@@ -90,26 +90,34 @@ def find_kaggle_dataset_dir(keywords, candidate_paths=None):
                 return path
 
     kaggle_input = "/kaggle/input"
-    if os.path.exists(kaggle_input):
+    if not os.path.exists(kaggle_input):
+        return None
+
+    # Build a flat list of all directories to search (top-level + /kaggle/input/datasets/)
+    search_roots = [kaggle_input]
+    combined_datasets_dir = os.path.join(kaggle_input, "datasets")
+    if os.path.isdir(combined_datasets_dir):
+        search_roots.append(combined_datasets_dir)
+
+    for search_root in search_roots:
         try:
-            with os.scandir(kaggle_input) as entries:
+            with os.scandir(search_root) as entries:
                 for entry in entries:
                     if entry.is_dir(follow_symlinks=False):
                         entry_lower = entry.name.lower()
                         if any(kw.lower() in entry_lower for kw in keywords):
                             return entry.path
+                        # Check 1 level deeper inside each subdirectory
                         try:
                             with os.scandir(entry.path) as sub_entries:
                                 for sub in sub_entries:
                                     if sub.is_dir(follow_symlinks=False):
-                                        sub_lower = sub.name.lower()
-                                        if any(kw.lower() in sub_lower for kw in keywords):
+                                        if any(kw.lower() in sub.name.lower() for kw in keywords):
                                             return sub.path
                         except Exception:
                             pass
         except Exception:
             pass
-
     return None
 
 
