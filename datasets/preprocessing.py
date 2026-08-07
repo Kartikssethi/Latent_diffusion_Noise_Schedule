@@ -76,24 +76,44 @@ def denormalize(tensor):
     return torch.clamp(tensor, 0.0, 1.0)
 
 
-def preprocess_and_save_dataset(dataset, save_dir, batch_size=32, num_workers=2):
+def preprocess_and_save_dataset(dataset, save_dir, batch_size=32, num_workers=2, max_batches=None):
     """
     Offline Preprocessing Utility:
     Iterates through dataset (e.g. 40% subset), applies 256x256 RGB [-1, 1] transforms,
     and saves preprocessed PyTorch tensors (.pt) to disk upfront in `save_dir`.
+
+    Args:
+        max_batches (int): Optional limit on number of batches to save (useful to avoid disk full).
     """
     os.makedirs(save_dir, exist_ok=True)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    
+
     print(f"Pre-saving {len(dataset)} preprocessed images to '{save_dir}'...")
     saved_count = 0
+    skipped = 0
     for idx, batch in enumerate(dataloader):
-        images = batch[0] if isinstance(batch, (tuple, list)) else batch
+        if max_batches is not None and idx >= max_batches:
+            break
+
         save_path = os.path.join(save_dir, f"batch_{idx}.pt")
-        torch.save(images, save_path)
-        saved_count += len(images)
-        
-    print(f"Successfully saved {saved_count} preprocessed tensor samples to '{save_dir}'.")
+
+        # Skip already-saved batches (resume support)
+        if os.path.exists(save_path):
+            skipped += 1
+            continue
+
+        images = batch[0] if isinstance(batch, (tuple, list)) else batch
+        try:
+            torch.save(images, save_path)
+            saved_count += len(images)
+        except RuntimeError as e:
+            if "iostream error" in str(e) or "enforce fail" in str(e) or "no space" in str(e).lower():
+                print(f"\n[WARNING] Disk full at batch {idx}! Stopped early.")
+                print(f"Saved {saved_count} images so far in '{save_dir}'. Use these for training.")
+                break
+            raise
+
+    print(f"Done. Saved: {saved_count} samples | Skipped (already existed): {skipped} | Dir: '{save_dir}'")
     return save_dir
 
 
