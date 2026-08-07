@@ -52,18 +52,43 @@ class KaggleImageFolderDataset(Dataset):
         return image, 0  # Dummy label for generative model / LDM training
 
 
+class PreprocessedTensorDataset(Dataset):
+    """
+    Dataset that loads preprocessed tensor batches (.pt files) saved on disk upfront.
+    """
+    def __init__(self, data_dir):
+        self.data_dir = data_dir
+        self.file_paths = sorted([
+            os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.pt')
+        ]) if os.path.exists(data_dir) else []
+        
+        self.samples = []
+        for f in self.file_paths:
+            try:
+                batch = torch.load(f)
+                if isinstance(batch, torch.Tensor):
+                    for i in range(len(batch)):
+                        self.samples.append(batch[i])
+            except Exception as e:
+                print(f"Error loading {f}: {e}")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx], 0
+
+
 def find_kaggle_dataset_dir(keywords, candidate_paths=None):
     """
     Fast discovery of dataset directory in Kaggle (/kaggle/input) or local candidate paths.
     Uses non-recursive os.scandir to complete in milliseconds.
     """
-    # 1. Check explicit candidate paths first
     if candidate_paths:
         for path in candidate_paths:
             if path and os.path.exists(path):
                 return path
 
-    # 2. Fast scan top-level subdirectories inside /kaggle/input
     kaggle_input = "/kaggle/input"
     if os.path.exists(kaggle_input):
         try:
@@ -73,7 +98,6 @@ def find_kaggle_dataset_dir(keywords, candidate_paths=None):
                         entry_lower = entry.name.lower()
                         if any(kw.lower() in entry_lower for kw in keywords):
                             return entry.path
-                        # Check 1 level deep inside kaggle input dataset folders
                         try:
                             with os.scandir(entry.path) as sub_entries:
                                 for sub in sub_entries:
