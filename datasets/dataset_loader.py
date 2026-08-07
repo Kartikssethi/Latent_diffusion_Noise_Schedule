@@ -72,7 +72,6 @@ def find_kaggle_dataset_dir(keywords, candidate_paths=None):
         for root, dirs, files in os.walk(kaggle_input):
             root_lower = root.lower()
             if any(kw.lower() in root_lower for kw in keywords):
-                # Ensure it contains image files or subdirectories
                 if len(files) > 0 or len(dirs) > 0:
                     return root
 
@@ -106,14 +105,27 @@ def load_dataset(dataset_name, root_dir=None, image_size=256, is_train=True, fra
     - 'celeba'
     - 'flowers' (Oxford Flowers 102)
     - 'lsun' (LSUN Bedroom)
+
+    Automatically applies:
+    1. 256x256 RGB Transformation & [-1, 1] Normalization
+    2. Subsampling to only `fraction` (default: 0.4 = 40%) of dataset
     """
     transform = get_transforms(image_size=image_size, is_train=is_train)
     name = dataset_name.lower().replace("-", "").replace("_", "")
 
     if name == "cifar10":
         cifar_candidate = find_kaggle_dataset_dir(["cifar"], [root_dir, "./data"])
-        cifar_root = cifar_candidate or (root_dir or "./data")
-        dataset = CIFAR10(root=cifar_root, train=is_train, download=True, transform=transform)
+        if cifar_candidate and os.path.exists(cifar_candidate):
+            valid_exts = ('.jpg', '.png', '.jpeg', '.bmp')
+            has_images = any(f.lower().endswith(valid_exts) for _, _, files in os.walk(cifar_candidate) for f in files)
+            if has_images:
+                dataset = KaggleImageFolderDataset(root_dir=cifar_candidate, transform=transform)
+            else:
+                download_needed = not os.path.exists(os.path.join(cifar_candidate, 'cifar-10-batches-py'))
+                dataset = CIFAR10(root=cifar_candidate, train=is_train, download=download_needed, transform=transform)
+        else:
+            cifar_root = root_dir or "./data"
+            dataset = CIFAR10(root=cifar_root, train=is_train, download=True, transform=transform)
 
     elif name in ["celeba", "celebafaces"]:
         search_paths = [
@@ -143,7 +155,6 @@ def load_dataset(dataset_name, root_dir=None, image_size=256, is_train=True, fra
         if valid_path:
             dataset = KaggleImageFolderDataset(root_dir=valid_path, transform=transform)
         else:
-            # Fallback to torchvision Flowers102 download
             dataset = Flowers102(root="./data", split="train" if is_train else "test", download=True, transform=transform)
 
     elif name in ["lsun", "lsunbedroom"]:
@@ -163,7 +174,6 @@ def load_dataset(dataset_name, root_dir=None, image_size=256, is_train=True, fra
         dataset = KaggleImageFolderDataset(root_dir=valid_path, transform=transform)
 
     else:
-        # Fallback generic directory loader
         valid_path = root_dir if (root_dir and os.path.exists(root_dir)) else find_kaggle_dataset_dir([name])
         if valid_path:
             dataset = KaggleImageFolderDataset(root_dir=valid_path, transform=transform)
