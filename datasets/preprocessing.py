@@ -1,3 +1,4 @@
+import os
 import torch
 from torchvision import transforms
 from torch.utils.data import Subset
@@ -17,6 +18,7 @@ class EnsureRGB:
             elif img.ndim == 3 and img.shape[0] == 4:
                 return img[:3, :, :]
         return img
+
 
 def get_transforms(image_size=256, crop_size=None, is_train=True):
     """
@@ -72,6 +74,27 @@ def denormalize(tensor):
     """
     tensor = (tensor * 0.5) + 0.5
     return torch.clamp(tensor, 0.0, 1.0)
+
+
+def preprocess_and_save_dataset(dataset, save_dir, batch_size=32, num_workers=2):
+    """
+    Offline Preprocessing Utility:
+    Iterates through dataset (e.g. 40% subset), applies 256x256 RGB [-1, 1] transforms,
+    and saves preprocessed PyTorch tensors (.pt) to disk upfront in `save_dir`.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    
+    print(f"Pre-saving {len(dataset)} preprocessed images to '{save_dir}'...")
+    saved_count = 0
+    for idx, batch in enumerate(dataloader):
+        images = batch[0] if isinstance(batch, (tuple, list)) else batch
+        save_path = os.path.join(save_dir, f"batch_{idx}.pt")
+        torch.save(images, save_path)
+        saved_count += len(images)
+        
+    print(f"Successfully saved {saved_count} preprocessed tensor samples to '{save_dir}'.")
+    return save_dir
 
 
 # Default 256x256 RGB transform instance
