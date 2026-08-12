@@ -1,14 +1,49 @@
-from .preprocessing import get_transforms, create_subset, denormalize, EnsureRGB, preprocess_and_save_dataset
-from .dataset_loader import load_dataset, KaggleImageFolderDataset, PreprocessedTensorDataset, load_cifar10
+from .preprocessing import (
+    get_transforms,
+    create_subset,
+    denormalize,
+    EnsureRGB,
+    save_preprocessed_dataset,
+    PreprocessedTensorDataset,
+    ImageFolderDataset,
+    CombinedDatasetWithLabels,
+    load_all_datasets,
+    create_dataloader,
+    verify_dataset,
+    run_preprocessing,
+    transform,
+    SOURCE_LABELS,
+    SOURCE_NAMES,
+    IMAGE_SIZE,
+    SAMPLE_FRACTION,
+    RANDOM_SEED,
+    BATCH_SIZE,
+)
+from .dataset_loader import load_dataset, KaggleImageFolderDataset, load_cifar10
 
 __all__ = [
+    # Preprocessing pipeline
     "get_transforms",
     "create_subset",
     "denormalize",
     "EnsureRGB",
-    "preprocess_and_save_dataset",
+    "save_preprocessed_dataset",
+    "PreprocessedTensorDataset",
+    "ImageFolderDataset",
+    "CombinedDatasetWithLabels",
+    "load_all_datasets",
+    "create_dataloader",
+    "verify_dataset",
+    "run_preprocessing",
+    "transform",
+    "SOURCE_LABELS",
+    "SOURCE_NAMES",
+    "IMAGE_SIZE",
+    "SAMPLE_FRACTION",
+    "RANDOM_SEED",
+    "BATCH_SIZE",
+    # Dataset loader (legacy/Kaggle support)
     "load_dataset",
     "KaggleImageFolderDataset",
-    "PreprocessedTensorDataset",
     "load_cifar10",
 ]

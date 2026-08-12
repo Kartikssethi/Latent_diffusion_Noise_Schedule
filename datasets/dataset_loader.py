@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision
 from torchvision.datasets import CIFAR10, Flowers102, ImageFolder
 
-from .preprocessing import get_transforms, create_subset
+from .preprocessing import get_transforms, create_subset, IMAGE_SIZE
 
 
 class KaggleImageFolderDataset(Dataset):
